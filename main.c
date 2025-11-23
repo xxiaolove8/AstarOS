@@ -6,12 +6,12 @@ int main(void)
     PathAPI_Init();
     PathAPI_ClearMap();
 
-    PathAPI_AddObstacle(1, 1);
-    PathAPI_AddObstacle(0, 2);
-    PathAPI_AddObstacle(4, 1);
+    PathAPI_AddObstacle(0, 1);
+    PathAPI_AddObstacle(15, 16);
+    PathAPI_AddObstacle(9, 18);
 
     Position start = {0, 0};
-    Position end   = {4, 4};
+    Position end   = {MAP_W-1, MAP_H-1};
 
     if (PathAPI_FindPath(start, end)) {
         char buf[256];

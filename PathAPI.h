@@ -7,8 +7,8 @@
 
 #include <stddef.h>
 
-#define MAP_W 5
-#define MAP_H 5
+#define MAP_W 20
+#define MAP_H 20
 
 // 坐标结构（0~4）
 typedef struct {
