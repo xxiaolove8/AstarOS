@@ -1,6 +1,6 @@
 #include "PathAPI.h"
 #include <stdio.h>
-
+#ifdef DEMO1
 int main(void)
 {
     PathAPI_Init();
@@ -30,3 +30,4 @@ int main(void)
 
     }
 }
+#endif

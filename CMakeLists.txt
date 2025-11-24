@@ -5,4 +5,5 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(AstarOS main.c
         PathAPI.c
-        AStar.c)
+        AStar.c
+        ASTAR_DEMO.c)
