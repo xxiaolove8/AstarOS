@@ -76,6 +76,18 @@ static void Init_MapAndRobots(void)
     memset(g_staticObstacles, 0, sizeof(g_staticObstacles));
 
     // 中央障碍照旧...
+    // ---------- 静态障碍：中央 2x2 方块 ----------
+    // (3,3), (3,4), (4,3), (4,4)
+    int obsX[] = {3, 6, 4, 4, 5, 3};
+    int obsY[] = {3, 4, 3, 4, 5, 6};
+    int obsCount = 6;
+    for (int i = 0; i < obsCount; ++i) {
+        int x = obsX[i];
+        int y = obsY[i];
+        g_staticObstacles[y][x] = 1;
+        PathAPI_AddObstacle(x, y);
+    }
+
 
     // Robot 0
     g_robots[0].id      = 0;
