@@ -6,4 +6,7 @@ set(CMAKE_C_STANDARD 11)
 add_executable(AstarOS main.c
         PathAPI.c
         AStar.c
-        ASTAR_DEMO.c)
+        SerialWin.c
+        SerialWin.h
+        #ASTAR_DEMO.c
+)

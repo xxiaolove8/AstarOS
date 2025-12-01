@@ -216,3 +216,25 @@ void PathAPI_PrintPathAsGrid(void)
     }
     printf("<- x\r\n");
 }
+
+// =================== 路径访问辅助函数（多车调度用） ===================
+
+// 返回最近一次 PathAPI_FindPath 计算出的路径节点数
+size_t PathAPI_GetPathCount(void)
+{
+    return g_pathCount;
+}
+
+// 返回最近一次路径中的第 index 个节点（0 = 起点）
+// 若 index 越界，则返回 (-1, -1)
+Position PathAPI_GetPathNode(size_t index)
+{
+    Position invalid;
+    invalid.x = -1;
+    invalid.y = -1;
+
+    if (index >= g_pathCount) {
+        return invalid;
+    }
+    return g_pathNodes[index];
+}

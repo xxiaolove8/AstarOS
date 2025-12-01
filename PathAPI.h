@@ -61,5 +61,10 @@ int PathAPI_GetPathString(char *outBuf, size_t outBufSize);
  */
 void PathAPI_PrintPathAsGrid(void);
 
+// 取得最近一次规划出的路径长度（节点个数）
+size_t PathAPI_GetPathCount(void);
 
+// 取得最近一次规划出的第 index 个路径节点（0 = 起点）
+// 若 index 越界，则返回 (-1, -1)
+Position PathAPI_GetPathNode(size_t index);
 #endif //UNTITLED_PATHAPI_H
