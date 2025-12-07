@@ -59,9 +59,11 @@ typedef struct {
 #ifdef _WIN32
     SerialPort port;    // 对应蓝牙串口
     const char *comName;
+    int hasSerial;      // 1=串口已成功打开, 0=只仿真
 #endif
 
 } Robot;
+
 static Robot g_robots[MAX_ROBOTS];
 static int   g_robotCount = 3;
 
@@ -98,6 +100,7 @@ static void Init_MapAndRobots(void)
     g_robots[0].arrived = 0;
     g_robots[0].heading = DIR_RIGHT;
 #ifdef _WIN32
+    g_robots[0].hasSerial = 0;
     g_robots[0].comName = "COM3";   // 这里改成你蓝牙的串口号
 #endif
 
@@ -110,6 +113,7 @@ static void Init_MapAndRobots(void)
     g_robots[1].arrived = 0;
     g_robots[1].heading = DIR_LEFT;
 #ifdef _WIN32
+    g_robots[0].hasSerial = 0;
     g_robots[1].comName = "COM4";
 #endif
 
@@ -122,8 +126,28 @@ static void Init_MapAndRobots(void)
     g_robots[2].arrived = 0;
     g_robots[2].heading = DIR_UP;
 #ifdef _WIN32
+    g_robots[0].hasSerial = 0;
     g_robots[2].comName = "COM5";
 #endif
+}
+static Heading GetTargetHeading(Position from, Position to)
+{
+    int dx = to.x - from.x;
+    int dy = to.y - from.y;
+
+    if (dx == 1 && dy == 0)  return DIR_RIGHT;
+    if (dx == -1 && dy == 0) return DIR_LEFT;
+    if (dx == 0 && dy == 1)  return DIR_DOWN;
+    if (dx == 0 && dy == -1) return DIR_UP;
+
+    // 非相邻，异常情况：打印一条警告，方便你调试地图/路径
+    fprintf(stderr,
+            "[WARN] GetTargetHeading: from (%d,%d) to (%d,%d) not adjacent! "
+            "dx=%d dy=%d\n",
+            from.x, from.y, to.x, to.y, dx, dy);
+
+    // 兜底：随便返回一个（不会导致崩溃，但你会在日志里看到问题）
+    return DIR_UP;
 }
 // ========== ASCII 输出整张网格（地图 + 障碍 + 机器人） ==========
 static void Print_Grid_ASCII(void)
@@ -164,13 +188,8 @@ static void Print_Grid_ASCII(void)
     }
     printf("\n");
 }
-
-// ========== 构建“动态地图”：其他车 + 预定格子都视为障碍 ==========
-static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W])
+static void ApplyStaticObstaclesToPathAPI(void)
 {
-    PathAPI_ClearMap();
-
-    // 1. 静态障碍
     for (int y = 0; y < MAP_H; ++y) {
         for (int x = 0; x < MAP_W; ++x) {
             if (g_staticObstacles[y][x]) {
@@ -178,8 +197,17 @@ static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W])
             }
         }
     }
+}
+// ========== 构建“动态地图”：其他车 + 预定格子都视为障碍 ==========
+static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W])
+{
+    // 先清空 PathAPI 内部地图
+    PathAPI_ClearMap();
 
-    // 2. 其他机器人
+    // 1) 固定不变的静态障碍：墙、禁止通行区
+    ApplyStaticObstaclesToPathAPI();
+
+    // 2) 动态障碍：其他车当前所处的位置
     for (int i = 0; i < g_robotCount; ++i) {
         if (i == selfIndex) continue;
         if (g_robots[i].arrived) continue;
@@ -187,7 +215,7 @@ static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W])
         int ox = g_robots[i].pos.x;
         int oy = g_robots[i].pos.y;
 
-        // 🚩 如果这个位置刚好是当前机器人 self 的目标，就暂时不当成障碍
+        // 特例：如果其他车刚好站在“我的终点”，最后一步要允许我走过去
         if (ox == g_robots[selfIndex].goal.x &&
             oy == g_robots[selfIndex].goal.y) {
             continue;
@@ -196,7 +224,7 @@ static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W])
         PathAPI_AddObstacle(ox, oy);
     }
 
-    // 3. reserved
+    // 3) 本时间步已被“预定”的格子（避免两车同时冲同一格）
     for (int y = 0; y < MAP_H; ++y) {
         for (int x = 0; x < MAP_W; ++x) {
             if (reserved[y][x]) {
@@ -207,34 +235,45 @@ static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W])
 }
 
 
-// 根据 pos -> next，推导目标朝向
-static Heading GetTargetHeading(Position from, Position to)
-{
-    int dx = to.x - from.x;
-    int dy = to.y - from.y;
-
-    if (dx == 1 && dy == 0)  return DIR_RIGHT;
-    if (dx == -1 && dy == 0) return DIR_LEFT;
-    if (dx == 0 && dy == 1)  return DIR_DOWN;
-    if (dx == 0 && dy == -1) return DIR_UP;
-
-    // 非相邻，异常
-    return DIR_UP;
-}
-
 // 对一个机器人，发送一个动作（可以扩展成发送序列）
 static void SendAction(Robot *rb, char action)
 {
-    printf("Send to robot %d: %c\n", rb->id, action);
-
 #ifdef _WIN32
-    // 如果串口打开成功，就实际发出去
-    if (rb->port.h && rb->port.h != INVALID_HANDLE_VALUE) {
+    if (rb->hasSerial && rb->port.h && rb->port.h != INVALID_HANDLE_VALUE) {
+        printf("Send to robot %d [COM=%s]: %c\n", rb->id, rb->comName, action);
         Serial_SendByte(&rb->port, action);
+    } else {
+        // 串口没打开的情况：只在仿真里动，但也打印出来方便你看
+        printf("Send to robot %d [SIM ONLY, no COM]: %c\n", rb->id, action);
     }
+#else
+    // 非 Windows 平台：纯仿真
+    printf("Send to robot %d [SIM ONLY, no serial]: %c\n", rb->id, action);
 #endif
 }
 
+#ifdef _WIN32
+// 简单扫描 COM1..COM20，看看哪些端口能打开（调试用）
+static void Debug_ScanCOMPorts(void)
+{
+    printf("=== Debug: scanning COM1..COM20 ===\n");
+    for (int i = 1; i <= 20; ++i) {
+        char name[16];
+        snprintf(name, sizeof(name), "COM%d", i);
+
+        SerialPort p;
+        p.h = NULL;
+
+        if (Serial_Open(&p, name, 9600)) {
+            printf("[PORT OK]   %s can be opened.\n", name);
+            Serial_Close(&p);
+        } else {
+            printf("[PORT FAIL] %s cannot be opened.\n", name);
+        }
+    }
+    printf("===================================\n\n");
+}
+#endif
 
 
 // ========== 为某一辆车规划“一步” ==========
@@ -324,6 +363,9 @@ static void PlanOneStep(int index, int reserved[MAP_H][MAP_W])
 // ========== 主仿真入口 ==========
 int main(void)
 {
+#ifdef _WIN32
+    Debug_ScanCOMPorts();  // 先看看当前机器上哪些 COM 能用
+#endif
     Init_MapAndRobots();
 #ifdef _WIN32
     for (int i = 0; i < g_robotCount; ++i) {
