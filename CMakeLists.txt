@@ -8,5 +8,7 @@ add_executable(AstarOS main.c
         AStar.c
         SerialWin.c
         SerialWin.h
-        #ASTAR_DEMO.c
+        Planner.c
+        Planner.h
+
 )
