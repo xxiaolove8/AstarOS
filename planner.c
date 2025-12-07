@@ -9,7 +9,7 @@
 #include "SerialWin.h"
 #endif
 
-
+#define ACK_TIMEOUT_MS 5000
 // 理论上可以改成任意值：地图由 MAP_W / MAP_H 控制，车由 MAX_ROBOTS 控制
 #define MAX_ROBOTS 3
 
@@ -49,6 +49,34 @@ static Heading GetTargetHeading(Position from, Position to);
 static void SendAction(Robot *rb, char action);
 static void PlanOneStep(int index, int reserved[MAP_H][MAP_W]);
 static void ApplyStaticObstaclesToPathAPI(void);
+
+static int WaitForAckDone(Robot *rb)
+{
+#ifdef _WIN32
+    if (!rb->hasSerial || !rb->port.h || rb->port.h == INVALID_HANDLE_VALUE) {
+        // 没有串口，就直接当作收到 ACK（仿真用）
+        return 1;
+    }
+
+    char ch = 0;
+    if (!Serial_RecvByte(&rb->port, &ch, ACK_TIMEOUT_MS)) {
+        printf("[WARN] Robot %d wait ACK timeout (no 'D' received)\n", rb->id);
+        return 0;
+    }
+
+    if (ch != 'D') {
+        printf("[WARN] Robot %d got unexpected byte '%c' (0x%02X) instead of 'D'\n",
+               rb->id, ch, (unsigned char)ch);
+        return 0;
+    }
+
+    // 正常收到 'D'
+    return 1;
+#else
+    (void)rb;   // 非 Windows 平台，直接视为成功，防止未使用参数 warning
+    return 1;
+#endif
+}
 
 
 
@@ -143,7 +171,7 @@ static void Init_MapAndRobots(void)
     g_robots[0].heading = DIR_RIGHT;
 #ifdef _WIN32
     g_robots[0].hasSerial = 0;
-    g_robots[0].comName = "COM3";   // 这里改成你蓝牙的串口号
+    g_robots[0].comName = "COM4";   // 这里改成你蓝牙的串口号
 #endif
 
     // Robot 1
@@ -155,8 +183,8 @@ static void Init_MapAndRobots(void)
     g_robots[1].arrived = 0;
     g_robots[1].heading = DIR_LEFT;
 #ifdef _WIN32
-    g_robots[0].hasSerial = 0;
-    g_robots[1].comName = "COM4";
+    g_robots[1].hasSerial = 0;
+    g_robots[1].comName = "COM3";
 #endif
 
     // Robot 2
@@ -168,7 +196,7 @@ static void Init_MapAndRobots(void)
     g_robots[2].arrived = 0;
     g_robots[2].heading = DIR_UP;
 #ifdef _WIN32
-    g_robots[0].hasSerial = 0;
+    g_robots[2].hasSerial = 0;
     g_robots[2].comName = "COM5";
 #endif
 }
@@ -284,15 +312,23 @@ static void SendAction(Robot *rb, char action)
     if (rb->hasSerial && rb->port.h && rb->port.h != INVALID_HANDLE_VALUE) {
         printf("Send to robot %d [COM=%s]: %c\n", rb->id, rb->comName, action);
         Serial_SendByte(&rb->port, action);
+
+        // 如果这一类动作需要等待 ACK（F/L/R），就在这里等 'D'
+        if (action == 'F' || action == 'L' || action == 'R') {
+            if (!WaitForAckDone(rb)) {   // 最长等 5 秒
+                printf("[WARN] Robot %d: no ACK for action '%c'\n", rb->id, action);
+            }
+        }
     } else {
-        // 串口没打开的情况：只在仿真里动，但也打印出来方便你看
-        printf("Send to robot %d [SIM ONLY, no COM]: %c\n", rb->id, action);
+        // 只仿真，不发串口
+        printf("Send to robot %d [SIM ONLY]: %c\n", rb->id, action);
     }
 #else
     // 非 Windows 平台：纯仿真
     printf("Send to robot %d [SIM ONLY, no serial]: %c\n", rb->id, action);
 #endif
 }
+
 
 
 // ========== 为某一辆车规划“一步” ==========

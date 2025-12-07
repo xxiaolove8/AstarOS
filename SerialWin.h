@@ -25,6 +25,8 @@ int Serial_SendByte(SerialPort *port, char c);
 // 关闭串口
 void Serial_Close(SerialPort *port);
 
+int Serial_RecvByte(SerialPort *port, char *outChar, DWORD timeout_ms);//收到一个字节
+
 #endif // _WIN32
 
 #endif //ASTAROS_SERIALWIN_H

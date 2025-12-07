@@ -9,6 +9,7 @@
 #include "SerialWin.h"
 #include <stdio.h>
 
+
 int Serial_Open(SerialPort *port, const char *comName, DWORD baud)
 {
     char fullName[32];
@@ -73,6 +74,30 @@ void Serial_Close(SerialPort *port)
         CloseHandle(port->h);
         port->h = INVALID_HANDLE_VALUE;
     }
+}
+
+int Serial_RecvByte(SerialPort *port, char *outChar, DWORD timeout_ms)
+{
+    if (!port || !port->h || port->h == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+
+    COMMTIMEOUTS timeouts;
+    GetCommTimeouts(port->h, &timeouts);
+
+    // 配置读超时：总超时 = timeout_ms
+    timeouts.ReadIntervalTimeout         = timeout_ms;
+    timeouts.ReadTotalTimeoutConstant    = timeout_ms;
+    timeouts.ReadTotalTimeoutMultiplier  = 0;
+    SetCommTimeouts(port->h, &timeouts);
+
+    DWORD readBytes = 0;
+    BOOL ok = ReadFile(port->h, outChar, 1, &readBytes, NULL);
+
+    if (!ok || readBytes == 0) {
+        return 0; // 失败或超时
+    }
+    return 1;     // 成功读到 1 字节
 }
 
 #endif // _WIN32
