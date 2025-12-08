@@ -119,8 +119,7 @@ int Planner_AllArrived(void)
 
 void Planner_StepOnce(void)
 {
-    int reserved[MAP_H][MAP_W];
-    memset(reserved, 0, sizeof(reserved));
+    int reserved[MAP_H][MAP_W] = {0};
 
     for (int i = 0; i < g_robotCount; ++i) {
         PlanOneStep(i, reserved);
