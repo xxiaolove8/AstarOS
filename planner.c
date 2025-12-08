@@ -9,16 +9,23 @@
 #include "SerialWin.h"
 #endif
 
-#define ACK_TIMEOUT_MS 5000
+#define ACK_TIMEOUT_MS 10000
 // 理论上可以改成任意值：地图由 MAP_W / MAP_H 控制，车由 MAX_ROBOTS 控制
 #define MAX_ROBOTS 3
 
 typedef enum {
-    DIR_UP = 0,    // y--
+    DIR_UP = 0,    // y--s
     DIR_RIGHT = 1, // x++
     DIR_DOWN = 2,  // y++
     DIR_LEFT = 3   // x--
 } Heading;
+
+
+typedef enum {
+    ACK_NONE     = 0, // 没收到 / 异常
+    ACK_OK       = 1, // 正常完成
+    ACK_OBSTACLE = 2  // 前方有障碍，已经退回
+} AckType;
 
 typedef struct {
     int id;
@@ -46,35 +53,40 @@ static void Init_MapAndRobots(void);
 static void Print_Grid_ASCII(void);
 static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W]);
 static Heading GetTargetHeading(Position from, Position to);
-static void SendAction(Robot *rb, char action);
+static AckType SendAction(Robot *rb, char action);
 static void PlanOneStep(int index, int reserved[MAP_H][MAP_W]);
 static void ApplyStaticObstaclesToPathAPI(void);
 
-static int WaitForAckDone(Robot *rb)
+static AckType WaitForAck(Robot *rb)
 {
 #ifdef _WIN32
     if (!rb->hasSerial || !rb->port.h || rb->port.h == INVALID_HANDLE_VALUE) {
-        // 没有串口，就直接当作收到 ACK（仿真用）
-        return 1;
+        // 没有串口，就直接当作成功
+        return ACK_OK;
     }
 
     char ch = 0;
     if (!Serial_RecvByte(&rb->port, &ch, ACK_TIMEOUT_MS)) {
-        printf("[WARN] Robot %d wait ACK timeout (no 'D' received)\n", rb->id);
-        return 0;
+        printf("[WARN] Robot %d wait ACK timeout (no byte received)\n", rb->id);
+        return ACK_NONE;
     }
 
-    if (ch != 'D') {
-        printf("[WARN] Robot %d got unexpected byte '%c' (0x%02X) instead of 'D'\n",
+    if (ch == 'D') {
+        // 正常动作完成
+        return ACK_OK;
+    } else if (ch == 'O') {
+        // 小车报告“前方格点有障碍，已退回”
+        printf("[INFO] Robot %d reports obstacle ('O')\n", rb->id);
+        return ACK_OBSTACLE;
+    } else {
+        printf("[WARN] Robot %d got unexpected byte '%c' (0x%02X)\n",
                rb->id, ch, (unsigned char)ch);
-        return 0;
+        return ACK_NONE;
     }
-
-    // 正常收到 'D'
-    return 1;
 #else
-    (void)rb;   // 非 Windows 平台，直接视为成功，防止未使用参数 warning
-    return 1;
+    (void)rb;
+    // 非 Windows 平台直接视为成功
+    return ACK_OK;
 #endif
 }
 
@@ -305,31 +317,36 @@ static void BuildDynamicMap(int selfIndex, int reserved[MAP_H][MAP_W])
 
 
 // 对一个机器人，发送一个动作（可以扩展成发送序列）
-static void SendAction(Robot *rb, char action)
+// 对一个机器人，发送一个动作，返回 ACK 状态
+static AckType SendAction(Robot *rb, char action)
 {
+    AckType ack = ACK_OK;
+
 #ifdef _WIN32
     if (rb->hasSerial && rb->port.h && rb->port.h != INVALID_HANDLE_VALUE) {
         printf("Send to robot %d [COM=%s]: %c\n", rb->id, rb->comName, action);
         Serial_SendByte(&rb->port, action);
 
-        // 如果这一类动作需要等待 ACK（F/L/R），就在这里等 'D'
+        // 对这三种动作都等 ACK（你也可以只对 F 等）
         if (action == 'F' || action == 'L' || action == 'R') {
-            if (!WaitForAckDone(rb)) {   // 最长等 5 秒
-                printf("[WARN] Robot %d: no ACK for action '%c'\n", rb->id, action);
+            ack = WaitForAck(rb);
+            if (ack == ACK_NONE) {
+                printf("[WARN] Robot %d: no valid ACK for action '%c'\n",
+                       rb->id, action);
             }
         }
     } else {
         // 只仿真，不发串口
         printf("Send to robot %d [SIM ONLY]: %c\n", rb->id, action);
+        ack = ACK_OK;
     }
 #else
-    // 非 Windows 平台：纯仿真
     printf("Send to robot %d [SIM ONLY, no serial]: %c\n", rb->id, action);
+    ack = ACK_OK;
 #endif
+
+    return ack;
 }
-
-
-
 // ========== 为某一辆车规划“一步” ==========
 static void PlanOneStep(int index, int reserved[MAP_H][MAP_W])
 {
@@ -385,24 +402,48 @@ static void PlanOneStep(int index, int reserved[MAP_H][MAP_W])
     Heading targetHeading = GetTargetHeading(rb->pos, next);
     int turn = ((int)targetHeading - (int)rb->heading + 4) % 4;
 
-    // 先根据转向发送 L / R
+    // 先根据转向发送 L / R（转向失败我们先不特殊处理）
     if (turn == 1) {          // 右转 90°
-        SendAction(rb, 'R');
+        (void)SendAction(rb, 'R');
         rb->heading = (Heading)((rb->heading + 1) % 4);
     } else if (turn == 3) {   // 左转 90°
-        SendAction(rb, 'L');
+        (void)SendAction(rb, 'L');
         rb->heading = (Heading)((rb->heading + 3) % 4);
     } else if (turn == 2) {   // 掉头
-        SendAction(rb, 'R');
-        SendAction(rb, 'R');
+        (void)SendAction(rb, 'R');
+        (void)SendAction(rb, 'R');
         rb->heading = (Heading)((rb->heading + 2) % 4);
     }
-    // 然后前进一格
-    SendAction(rb, 'F');
 
-    // 仿真中直接把坐标跳到 next
+    // 然后尝试前进一格
+    AckType fAck = SendAction(rb, 'F');
+
+    // === 新增：根据 ACK 判断是否遇到障碍 ===
+    if (fAck == ACK_OBSTACLE) {
+        // 这里假设：小车已经自己退回到了原来的格子 rb->pos
+        printf("Robot %d: detected obstacle at (%d,%d), stay at (%d,%d)\n",
+               rb->id, next.x, next.y, rb->pos.x, rb->pos.y);
+
+        // 把 next 这格加入静态障碍，下次规划会绕开
+        if (next.x >= 0 && next.x < MAP_W && next.y >= 0 && next.y < MAP_H) {
+            g_staticObstacles[next.y][next.x] = 1;
+        }
+
+        // 不更新位置，不占用 reserved[next]
+        return;
+    }
+
+    if (fAck == ACK_NONE) {
+        // 没收到有效 ACK，当作这一步没动，等待下一个周期
+        printf("Robot %d: move to (%d,%d) failed (no ACK) -> WAIT\n",
+               rb->id, next.x, next.y);
+        return;
+    }
+
+    // 正常情况：ACK_OK，前进成功
     printf("Robot %d: (%d,%d) -> (%d,%d)\n",
            rb->id, rb->pos.x, rb->pos.y, next.x, next.y);
+
     rb->pos = next;
     reserved[next.y][next.x] = 1;
 
