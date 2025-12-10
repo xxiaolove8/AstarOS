@@ -10,9 +10,11 @@
 #endif
 
 #define ACK_TIMEOUT_MS 10000
+
 // 理论上可以改成任意值：地图由 MAP_W / MAP_H 控制，车由 MAX_ROBOTS 控制
 #define MAX_ROBOTS 1
 
+//自定义枚举、变量、辅助函数区域
 typedef enum {
     DIR_UP = 0,    // y--s
     DIR_RIGHT = 1, // x++
@@ -56,7 +58,10 @@ static Heading GetTargetHeading(Position from, Position to);
 static AckType SendAction(Robot *rb, char action);
 static void PlanOneStep(int index, int reserved[MAP_H][MAP_W]);
 static void ApplyStaticObstaclesToPathAPI(void);
+//========================================================================
 
+
+//ACK控制函数==============================================================
 static AckType WaitForAck(Robot *rb)
 {
 #ifdef _WIN32
@@ -90,7 +95,7 @@ static AckType WaitForAck(Robot *rb)
 #endif
 }
 
-
+//===============================================================================
 
 void Planner_Init(void)
 {
@@ -151,7 +156,7 @@ void Planner_Deinit(void)
 
 
 
-// ========== 初始化地图 + 机器人（你要求的方格网 + 位置） ==========
+// ========== 初始化地图 + 机器人=================================== ==========
 static void Init_MapAndRobots(void)
 {
     PathAPI_Init();
