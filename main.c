@@ -63,7 +63,7 @@ static void Debug_ScanCOMPorts(void)
 
 int main(void)
 {
-    Debug_ScanCOMPorts();
+    /*Debug_ScanCOMPorts();*/
 
     Planner_Init();
 

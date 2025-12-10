@@ -11,7 +11,7 @@
 
 #define ACK_TIMEOUT_MS 10000
 // 理论上可以改成任意值：地图由 MAP_W / MAP_H 控制，车由 MAX_ROBOTS 控制
-#define MAX_ROBOTS 3
+#define MAX_ROBOTS 1
 
 typedef enum {
     DIR_UP = 0,    // y--s
@@ -43,7 +43,7 @@ typedef struct {
 } Robot;
 
 static Robot g_robots[MAX_ROBOTS];
-static int   g_robotCount = 3;
+static int   g_robotCount = MAX_ROBOTS;
 
 // 保存静态障碍（地图的墙）
 static int g_staticObstacles[MAP_H][MAP_W];
@@ -158,12 +158,12 @@ static void Init_MapAndRobots(void)
     PathAPI_ClearMap();
     memset(g_staticObstacles, 0, sizeof(g_staticObstacles));
 
-    // 中央障碍照旧...
-    // ---------- 静态障碍：中央 2x2 方块 ----------
-    // (3,3), (3,4), (4,3), (4,4)
-    int obsX[] = {3, 6, 4, 4, 5, 3};
-    int obsY[] = {3, 4, 3, 4, 5, 6};
-    int obsCount = 6;
+
+    // ---------- 静态障碍初始化 ----------
+
+    int obsX[] = {1};
+    int obsY[] = {1};
+    int obsCount = 1;
     for (int i = 0; i < obsCount; ++i) {
         int x = obsX[i];
         int y = obsY[i];
@@ -176,16 +176,16 @@ static void Init_MapAndRobots(void)
     g_robots[0].id      = 0;
     g_robots[0].pos.x   = 0;
     g_robots[0].pos.y   = 0;
-    g_robots[0].goal.x  = 7;
-    g_robots[0].goal.y  = 7;
+    g_robots[0].goal.x  = 2;
+    g_robots[0].goal.y  = 2;
     g_robots[0].arrived = 0;
     g_robots[0].heading = DIR_RIGHT;
 #ifdef _WIN32
     g_robots[0].hasSerial = 0;
-    g_robots[0].comName = "COM4";   // 这里改成你蓝牙的串口号
+    g_robots[0].comName = "COM3";   // 这里改成蓝牙的串口号
 #endif
 
-    // Robot 1
+    /*// Robot 1
     g_robots[1].id      = 1;
     g_robots[1].pos.x   = 7;
     g_robots[1].pos.y   = 0;
@@ -209,7 +209,7 @@ static void Init_MapAndRobots(void)
 #ifdef _WIN32
     g_robots[2].hasSerial = 0;
     g_robots[2].comName = "COM5";
-#endif
+#endif*/
 }
 static Heading GetTargetHeading(Position from, Position to)
 {
