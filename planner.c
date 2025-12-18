@@ -12,7 +12,7 @@
 #define ACK_TIMEOUT_MS 10000
 
 // 理论上可以改成任意值：地图由 MAP_W / MAP_H 控制，车由 MAX_ROBOTS 控制
-#define MAX_ROBOTS 1
+#define MAX_ROBOTS 2
 
 //自定义枚举、变量、辅助函数区域
 typedef enum {
@@ -190,19 +190,19 @@ static void Init_MapAndRobots(void)
     g_robots[0].comName = "COM3";   // 这里改成蓝牙的串口号
 #endif
 
-    /*// Robot 1
+    // Robot 1
     g_robots[1].id      = 1;
-    g_robots[1].pos.x   = 7;
+    g_robots[1].pos.x   = 2;
     g_robots[1].pos.y   = 0;
     g_robots[1].goal.x  = 0;
-    g_robots[1].goal.y  = 6;
+    g_robots[1].goal.y  = 2;
     g_robots[1].arrived = 0;
     g_robots[1].heading = DIR_LEFT;
 #ifdef _WIN32
     g_robots[1].hasSerial = 0;
-    g_robots[1].comName = "COM3";
+    g_robots[1].comName = "COM20";
 #endif
-
+/*
     // Robot 2
     g_robots[2].id      = 2;
     g_robots[2].pos.x   = 0;
