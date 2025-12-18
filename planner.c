@@ -166,15 +166,15 @@ static void Init_MapAndRobots(void)
 
     // ---------- 静态障碍初始化 ----------
 
-    int obsX[] = {1};
+    /*int obsX[] = {1};
     int obsY[] = {1};
-    int obsCount = 1;
+    int obsCount = 0;
     for (int i = 0; i < obsCount; ++i) {
         int x = obsX[i];
         int y = obsY[i];
         g_staticObstacles[y][x] = 1;
         PathAPI_AddObstacle(x, y);
-    }
+    }*/
 
 
     // Robot 0
@@ -456,5 +456,6 @@ static void PlanOneStep(int index, int reserved[MAP_H][MAP_W])
     if (rb->pos.x == rb->goal.x && rb->pos.y == rb->goal.y) {
         rb->arrived = 1;
         printf("Robot %d reached goal!\n", rb->id);
+        (void)SendAction(rb,'D');
     }
 }
